@@ -13,11 +13,15 @@ class ReaderSettings {
     this.fontSize = 18,
     this.lineHeight = 1.7,
     this.theme = ReaderTheme.light,
+    this.flow = ReaderFlow.scrolled,
   });
 
   double fontSize;
   double lineHeight;
   String theme;
+
+  /// 'scrolled' or 'paginated'. See [ReaderFlow] for why scrolling is the default.
+  String flow;
 
   static const double minFontSize = 12;
   static const double maxFontSize = 34;
@@ -28,12 +32,14 @@ class ReaderSettings {
         'fontSize': fontSize,
         'lineHeight': lineHeight,
         'theme': theme,
+        'flow': flow,
       };
 
   static ReaderSettings fromJson(Map<String, dynamic> json) => ReaderSettings(
         fontSize: (json['fontSize'] as num?)?.toDouble() ?? 18,
         lineHeight: (json['lineHeight'] as num?)?.toDouble() ?? 1.7,
         theme: (json['theme'] as String?) ?? ReaderTheme.light,
+        flow: (json['flow'] as String?) ?? ReaderFlow.scrolled,
       );
 
   Future<File> _file() async {
@@ -77,12 +83,41 @@ class ReaderSettings {
       };
 
   /// Payload for `dshReader.applyLayout`.
-  Map<String, Object?> toLayoutPayload({double viewWidth = 0, double viewHeight = 0}) => {
-        'flow': 'paginated',
-        'gap': 8,
-        'margin': viewHeight > 0 ? (viewHeight * 0.035).clamp(12, 64) : 24,
-        if (viewWidth > 720) 'maxInlineSize': 640,
-      };
+  Map<String, Object?> toLayoutPayload({double viewWidth = 0, double viewHeight = 0}) {
+    final paginated = flow == ReaderFlow.paginated;
+    return {
+      'flow': flow,
+      'gap': 8,
+      // `margin` (the running head/foot band) only exists in paginated mode; foliate
+      // ignores it when scrolling.
+      if (paginated && viewHeight > 0)
+        'margin': (viewHeight * 0.035).clamp(12, 64),
+      // In scrolled mode foliate uses max-inline-size directly as the text column
+      // width, so cap it on wide screens and otherwise let it fill the viewport.
+      if (viewWidth > 720) 'maxInlineSize': 640,
+    };
+  }
+}
+
+/// Page-turn model.
+///
+/// `scrolled` is the default because of how foliate's paginator is built: paginated
+/// mode lays the section out as CSS multi-columns and turns pages by writing
+/// `scrollLeft` from JavaScript, which forces the engine to repaint the whole column
+/// layout on every gesture. Scrolled mode hands the same content to the browser as a
+/// plain overflow-scrolled box (`overflow: auto`), which is composited natively and is
+/// dramatically smoother on a phone. foliate's own README also flags the paginator as
+/// the slow path.
+class ReaderFlow {
+  static const scrolled = 'scrolled';
+  static const paginated = 'paginated';
+
+  static const labels = <String, String>{
+    scrolled: '上下滚动',
+    paginated: '左右翻页',
+  };
+
+  static List<String> get values => labels.keys.toList(growable: false);
 }
 
 class ReaderTheme {

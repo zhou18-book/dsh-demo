@@ -205,8 +205,18 @@ function reportSelection(doc, index) {
 /* --------------------------------------------------------------- read styles */
 
 // Injected into every section document via renderer.setStyles().
+//
+// The base size goes on <html>, and every element that carries body text is pinned to
+// it in rem. This is not belt-and-braces. Real EPUBs routinely declare an absolute size
+// on the text element itself -- `p { font-size: 10pt }` is extremely common (both the
+// Wenshuoge editions and most Calibre output do it). An inherited value always loses to
+// a declaration on the element itself, *even when the inherited one is !important*, so
+// putting the size on <body> alone resized headings (which usually declare no size and
+// therefore inherit) while leaving body text completely untouched. That was a real
+// reported bug, found only on a real book, not on a synthetic one.
 function buildStyles(opts) {
   const o = opts || {};
+  const size = o.fontSize ?? 18;
   const fontFamily = o.fontFamily
     ? `"${o.fontFamily}", system-ui, "Noto Sans CJK SC", sans-serif`
     : 'system-ui, "Noto Sans CJK SC", "Source Han Sans SC", sans-serif';
@@ -215,23 +225,50 @@ function buildStyles(opts) {
       --overlayer-highlight-opacity: ${o.highlightOpacity ?? 0.45};
     }
     html {
+      font-size: ${size}px !important;
       color: ${o.color || '#1a1a1a'} !important;
       background: ${o.background || '#ffffff'} !important;
     }
     body {
       font-family: ${fontFamily} !important;
-      font-size: ${o.fontSize ?? 18}px !important;
+      font-size: 1rem !important;
       line-height: ${o.lineHeight ?? 1.7} !important;
       color: ${o.color || '#1a1a1a'} !important;
       background: ${o.background || '#ffffff'} !important;
       text-align: ${o.textAlign || 'justify'} !important;
       padding: 0 !important;
       margin: 0 !important;
-      -webkit-hyphens: auto;
-      hyphens: auto;
+      /* Hyphenation costs a dictionary lookup per word and buys nothing for CJK, which
+         is the primary target here. Off by default. */
+      -webkit-hyphens: none;
+      hyphens: none;
     }
+
+    /* Block-level text carriers: pinned to the root size so the book's own absolute
+       sizes cannot win. */
+    p, div, li, blockquote, dd, dt, td, th, figcaption, figure,
+    section, article, aside, main, header, footer, pre, address, center {
+      font-size: 1rem !important;
+    }
+    /* Inline runs follow whatever container they sit in. */
+    span, em, strong, i, b, u, s, a, cite, q, code, kbd, samp, ruby {
+      font-size: inherit !important;
+    }
+    /* Keep the deviations that actually carry meaning. */
+    small { font-size: 0.85rem !important; }
+    sub, sup { font-size: 0.72rem !important; }
+    ruby rt { font-size: 0.5rem !important; }
+
+    /* Headings keep a hierarchy, scaled off the same root size. */
+    h1 { font-size: 1.70rem !important; }
+    h2 { font-size: 1.45rem !important; }
+    h3 { font-size: 1.25rem !important; }
+    h4 { font-size: 1.12rem !important; }
+    h5 { font-size: 1.00rem !important; }
+    h6 { font-size: 0.92rem !important; }
+
     p { margin: 0 0 0.85em !important; }
-    img { max-width: 100% !important; height: auto !important; }
+    img, svg, video { max-width: 100% !important; height: auto !important; }
     a { color: ${o.linkColor || '#1565c0'} !important; }
     ::selection { background: ${o.selectionColor || 'rgba(21,101,192,.28)'}; }
   `;

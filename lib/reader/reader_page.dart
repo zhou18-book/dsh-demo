@@ -53,8 +53,19 @@ class _ReaderPageState extends State<ReaderPage> {
   bool _bookOpened = false;
   String? _fatalError;
 
+  /// Progress readout, kept in a notifier rather than plain widget state on purpose.
+  /// `relocate` fires continuously while the reader scrolls; calling setState here would
+  /// rebuild this whole page -- including the WebView widget -- on every event, which is
+  /// exactly the kind of thing that makes scrolling stutter.
+  final ValueNotifier<String> _progressText = ValueNotifier<String>('0.0%');
+
   double _fraction = 0;
   String? _positionLabel;
+
+  String _formatProgress() {
+    final percent = (_fraction * 100).toStringAsFixed(1);
+    return _positionLabel == null ? '$percent%' : '$_positionLabel · $percent%';
+  }
 
   String? _pendingCfi;
   double _pendingFraction = 0;
@@ -72,6 +83,7 @@ class _ReaderPageState extends State<ReaderPage> {
     _progressDebounce?.cancel();
     // Best-effort flush; the page is going away so we cannot await here.
     _flushProgress();
+    _progressText.dispose();
     super.dispose();
   }
 
@@ -112,6 +124,7 @@ class _ReaderPageState extends State<ReaderPage> {
       _positionLabel = progress?.sectionLabel;
       _controller = controller;
     });
+    _progressText.value = _formatProgress();
   }
 
   void _fail(String message) {
@@ -214,10 +227,10 @@ class _ReaderPageState extends State<ReaderPage> {
         (data['pageLabel'] as String?) ??
         _locationLabel(data);
 
-    setState(() {
-      if (fraction != null) _fraction = fraction.clamp(0, 1);
-      if (label != null && label.isNotEmpty) _positionLabel = label;
-    });
+    if (fraction != null) _fraction = fraction.clamp(0, 1);
+    if (label != null && label.isNotEmpty) _positionLabel = label;
+    // Deliberately no setState: this only feeds the progress strip.
+    _progressText.value = _formatProgress();
 
     if (cfi == null || cfi.isEmpty) return;
     _pendingCfi = cfi;
@@ -555,7 +568,21 @@ class _ReaderPageState extends State<ReaderPage> {
                         ),
                       ],
                     ),
+                    const SizedBox(height: 12),
+                    Text('翻页方式', style: Theme.of(context).textTheme.titleSmall),
                     const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      children: [
+                        for (final flow in ReaderFlow.values)
+                          ChoiceChip(
+                            label: Text(ReaderFlow.labels[flow] ?? flow),
+                            selected: _settings.flow == flow,
+                            onSelected: (_) => apply(() => _settings.flow = flow),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
                     Text('主题', style: Theme.of(context).textTheme.titleSmall),
                     const SizedBox(height: 8),
                     Wrap(
@@ -660,11 +687,12 @@ class _ReaderPageState extends State<ReaderPage> {
           preferredSize: const Size.fromHeight(18),
           child: Padding(
             padding: const EdgeInsets.only(bottom: 4),
-            child: Text(
-              _positionLabel == null
-                  ? '${(_fraction * 100).toStringAsFixed(1)}%'
-                  : '$_positionLabel · ${(_fraction * 100).toStringAsFixed(1)}%',
-              style: TextStyle(fontSize: 11, color: onBackground.withValues(alpha: 0.6)),
+            child: ValueListenableBuilder<String>(
+              valueListenable: _progressText,
+              builder: (context, text, _) => Text(
+                text,
+                style: TextStyle(fontSize: 11, color: onBackground.withValues(alpha: 0.6)),
+              ),
             ),
           ),
         ),
