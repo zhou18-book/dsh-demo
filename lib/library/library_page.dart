@@ -6,6 +6,7 @@ import '../data/models.dart';
 import '../export/export_action.dart';
 import '../export/markdown_export.dart';
 import '../reader/reader_page.dart';
+import '../version.dart';
 import 'import_service.dart';
 
 class LibraryPage extends StatefulWidget {
@@ -183,7 +184,14 @@ class _LibraryPageState extends State<LibraryPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('书架'),
+        title: const Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('书架'),
+            Text('v$appVersion', style: TextStyle(fontSize: 11)),
+          ],
+        ),
         actions: [
           IconButton(
             tooltip: '导出全部笔记',
